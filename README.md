@@ -1,8 +1,13 @@
-# Tony Stark Gesture Control Prototype
+# daddys-home
 
-This workspace starts with a minimal, safety-first gesture control daemon prototype.
-It uses a webcam plus MediaPipe hand landmarks, then maps deliberate hand gestures to
-mouse and keyboard actions through PyAutoGUI when available.
+Safety-first webcam gesture control prototypes. Uses MediaPipe hand and face
+landmarks to map deliberate gestures to mouse and keyboard actions through
+PyAutoGUI when available.
+
+## Privacy
+
+Webcam frames stay on your machine. The daemons display a local OpenCV overlay
+only; nothing is recorded, uploaded, or sent over the network.
 
 ## Safety Defaults
 
@@ -105,6 +110,8 @@ python3 -m gesture_control_daemon --dry-run --debug-overlay
 python3 -m face_control_daemon --dry-run --debug-overlay
 ```
 
+### Hand daemon tuning
+
 Watch the overlay for `Gesture`, `fingers`, and `Pinch ratio`. Tune thresholds one
 at a time. If normal cursor movement jitters, raise `--cursor-deadzone`. If scroll
 fires too easily, raise `--scroll-deadzone` or lower `--scroll-scale`. If pinch is
@@ -120,12 +127,26 @@ The intended click flow is: point with the index finger to aim, then pinch witho
 moving the cursor. Pinch freezes cursor updates so the click does not get pulled
 toward the closing index finger.
 
-For the hand + face daemon, the cursor moves relative to your hand like a
-trackpad, so no neutral calibration is needed. Raise `--cursor-gain` to cover
-the screen with less hand travel, lower it for finer control, and raise
-`--cursor-deadzone` if the pointer jitters while your hand is still. If wink
-clicks fire during ordinary blinks, lower `--wink-threshold`, raise
-`--eye-open-threshold`, or raise `--wink-gap`.
+### Hand + face daemon tuning
+
+The cursor moves relative to your hand like a trackpad, so no neutral calibration
+is needed. Raise `--cursor-gain` to cover the screen with less hand travel, lower
+it for finer control, and raise `--cursor-deadzone` if the pointer jitters while
+your hand is still.
+
+Watch the overlay for `EAR L/R`, `Mouth`, and `Roll`. If wink clicks fire during
+ordinary blinks, lower `--wink-threshold`, raise `--eye-open-threshold`, or raise
+`--wink-gap`.
+
+## Tests
+
+```bash
+python3 -m unittest discover -s tests
+```
+
+## License
+
+MIT — see [LICENSE](LICENSE).
 
 This is a local prototype, not an OS shell replacement. Gesture thresholds are simple
 heuristics and should be tuned with real camera feedback before relying on them.

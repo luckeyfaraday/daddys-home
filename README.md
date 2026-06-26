@@ -72,7 +72,7 @@ python3 -m face_control_daemon --enable-tilt-scroll
 Hand + face tuning options:
 
 ```bash
-python3 -m face_control_daemon --cursor-gain 2.0 --cursor-deadzone 3
+python3 -m face_control_daemon --cursor-deadzone 10 --margin 0.1
 python3 -m face_control_daemon --wink-threshold 0.16 --eye-open-threshold 0.24
 python3 -m face_control_daemon --mouth-open-threshold 0.38
 ```
@@ -91,10 +91,8 @@ Hand daemon:
 
 Hand + face daemon:
 
-- Hand in view: move cursor relative to its current position, like a trackpad.
-  The pointer moves by however much your hand moves, independent of finger pose;
-  hold your hand still and the cursor rests. Take your hand out of frame and
-  bring it back to re-center without the cursor jumping.
+- Hand in view: move cursor; the pointer follows your palm whenever a hand is
+  visible, independent of finger pose.
 - One-eye wink: click with debounce at the current cursor position.
 - Both eyes closed: blink only, no click.
 - Mouth open hold: press and hold the mouse button after a short dwell, so you
@@ -129,10 +127,9 @@ toward the closing index finger.
 
 ### Hand + face daemon tuning
 
-The cursor moves relative to your hand like a trackpad, so no neutral calibration
-is needed. Raise `--cursor-gain` to cover the screen with less hand travel, lower
-it for finer control, and raise `--cursor-deadzone` if the pointer jitters while
-your hand is still.
+The cursor follows your hand directly, so no neutral calibration is needed. Widen
+`--margin` to reach screen edges with less hand travel, or raise
+`--cursor-deadzone` if the pointer jitters.
 
 Watch the overlay for `EAR L/R`, `Mouth`, and `Roll`. If wink clicks fire during
 ordinary blinks, lower `--wink-threshold`, raise `--eye-open-threshold`, or raise

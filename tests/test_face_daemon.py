@@ -56,8 +56,8 @@ def make_config(**overrides):
         "debug_overlay": False,
         "enable_tilt_scroll": False,
         "smoothing": 1.0,
-        "cursor_deadzone": 2.0,
-        "cursor_gain": 1.0,
+        "cursor_deadzone": 8.0,
+        "margin": 0.08,
         "click_cooldown": 0.65,
         "wink_hold_seconds": 0.16,
         "drag_hold_seconds": 0.35,
@@ -152,7 +152,7 @@ class FaceActionTests(unittest.TestCase):
         state = RuntimeState(
             control_enabled=True,
             active_gesture="left_wink",
-            cursor_pos=(500.0, 500.0),
+            smoothed_cursor=(500.0, 500.0),
         )
         backend = RecordingBackend()
         metrics = FaceMetrics(0.12, 0.30, 0.10, 0.0, (0.1, 0.1))
@@ -162,39 +162,18 @@ class FaceActionTests(unittest.TestCase):
 
         self.assertEqual(backend.moves, [])
         self.assertEqual(backend.clicks, 1)
-        self.assertEqual(state.cursor_pos, (500.0, 500.0))
+        self.assertEqual(state.smoothed_cursor, (500.0, 500.0))
 
-    def test_hand_moves_cursor_relative_to_current_position(self):
-        config = make_config()
-        state = RuntimeState(control_enabled=True, active_gesture="face_neutral")
-        backend = RecordingBackend()  # 1000x1000, starts centered at (500, 500)
-        metrics = FaceMetrics(0.30, 0.30, 0.10, 0.0, (0.5, 0.5))
-        gesture = FaceGesture("face_neutral", 0.85, metrics, metrics.nose_point)
-
-        # First frame anchors the reference; no movement yet.
-        apply_actions(config, state, backend, (0.5, 0.5), gesture)
-        self.assertEqual(backend.moves, [])
-
-        # Hand moves +0.1 in x: cursor nudges from 500 by 0.1*1000*gain(1.0)=100.
-        apply_actions(config, state, backend, (0.6, 0.5), gesture)
-        self.assertEqual(len(backend.moves), 1)
-        self.assertAlmostEqual(backend.moves[-1][0], 600.0)
-        self.assertAlmostEqual(backend.moves[-1][1], 500.0)
-
-    def test_cursor_does_not_jump_when_hand_reappears(self):
+    def test_hand_moves_cursor_regardless_of_face_gesture(self):
         config = make_config()
         state = RuntimeState(control_enabled=True, active_gesture="face_neutral")
         backend = RecordingBackend()
         metrics = FaceMetrics(0.30, 0.30, 0.10, 0.0, (0.5, 0.5))
         gesture = FaceGesture("face_neutral", 0.85, metrics, metrics.nose_point)
 
-        apply_actions(config, state, backend, (0.5, 0.5), gesture)  # anchor
-        apply_actions(config, state, backend, None, gesture)  # hand leaves
-        moves_before = len(backend.moves)
+        apply_actions(config, state, backend, (0.5, 0.5), gesture)
 
-        # Hand reappears far away: should re-anchor, not teleport the cursor.
-        apply_actions(config, state, backend, (0.9, 0.9), gesture)
-        self.assertEqual(len(backend.moves), moves_before)
+        self.assertEqual(len(backend.moves), 1)
 
     def test_mouth_open_starts_drag_and_hand_keeps_moving(self):
         config = make_config(drag_hold_seconds=0.0)
@@ -203,8 +182,7 @@ class FaceActionTests(unittest.TestCase):
         metrics = FaceMetrics(0.30, 0.30, 0.40, 0.0, (0.52, 0.50))
         gesture = FaceGesture("mouth_open", 0.9, metrics, metrics.nose_point)
 
-        apply_actions(config, state, backend, (0.5, 0.5), gesture)  # anchor + drag down
-        apply_actions(config, state, backend, (0.6, 0.5), gesture)  # drag while moving
+        apply_actions(config, state, backend, (0.6, 0.4), gesture)
 
         self.assertEqual(backend.downs, 1)
         self.assertEqual(len(backend.moves), 1)

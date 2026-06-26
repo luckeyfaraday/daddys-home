@@ -15,6 +15,7 @@ from gesture_control_daemon.daemon import (
     average_points as hand_center_point,
     clamp,
     missing_required_modules,
+    move_cursor,
     parse_camera_source,
     prepare_mediapipe_vision_import,
     shorten,
@@ -64,7 +65,7 @@ class RuntimeConfig:
     enable_tilt_scroll: bool
     smoothing: float
     cursor_deadzone: float
-    cursor_gain: float
+    margin: float
     click_cooldown: float
     wink_hold_seconds: float
     drag_hold_seconds: float
@@ -88,9 +89,7 @@ class RuntimeState:
     click_armed: bool = True
     last_click_at: float = 0.0
     last_scroll_at: float = 0.0
-    cursor_pos: Optional[Point] = None
-    last_hand_point: Optional[Point] = None
-    cursor_velocity: Point = (0.0, 0.0)
+    smoothed_cursor: Optional[Point] = None
     hand_present: bool = False
     debug_overlay: bool = False
     last_event: str = "starting"
@@ -140,14 +139,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--cursor-deadzone",
         type=float,
-        default=2.0,
-        help="Ignore per-frame cursor motion below this many screen pixels. Default: 2.",
+        default=6.0,
+        help="Ignore cursor movements below this many screen pixels. Default: 6.",
     )
     parser.add_argument(
-        "--cursor-gain",
+        "--margin",
         type=float,
-        default=1.5,
-        help="Relative cursor speed: hand motion times this maps to screen pixels. Default: 1.5.",
+        default=0.08,
+        help="Ignored camera edge margin for hand cursor mapping. Default: 0.08.",
     )
     parser.add_argument(
         "--click-cooldown",
@@ -235,7 +234,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         enable_tilt_scroll=args.enable_tilt_scroll,
         smoothing=clamp(args.smoothing, 0.05, 1.0),
         cursor_deadzone=max(0.0, args.cursor_deadzone),
-        cursor_gain=max(0.1, args.cursor_gain),
+        margin=clamp(args.margin, 0.0, 0.35),
         click_cooldown=max(0.0, args.click_cooldown),
         wink_hold_seconds=max(0.0, args.wink_hold_seconds),
         drag_hold_seconds=max(0.0, args.drag_hold_seconds),
@@ -496,17 +495,12 @@ def apply_actions(
 
     if not state.control_enabled:
         release_drag_if_needed(state, backend)
-        forget_hand_reference(state)
         return
 
-    # Cursor movement is hand-driven, pose-independent, and relative: the pointer
-    # moves by however much the hand moves from the previous frame, starting from
-    # wherever the cursor already is. A missing hand drops the reference so the
-    # next sighting resumes without a jump.
+    # Cursor movement is hand-driven and pose-independent: whenever a hand is
+    # visible the pointer follows its palm center, even mid drag.
     if hand_point is not None:
-        move_cursor_relative(config, state, backend, hand_point)
-    else:
-        forget_hand_reference(state)
+        move_cursor(config, state, backend, hand_point)
 
     if gesture.metrics is None:
         release_drag_if_needed(state, backend)
@@ -543,47 +537,6 @@ def apply_actions(
         and gesture.confidence >= config.min_confidence
     ):
         apply_tilt_scroll(config, state, backend, gesture.metrics.roll_degrees)
-
-
-def move_cursor_relative(
-    config: RuntimeConfig,
-    state: RuntimeState,
-    backend: ActionBackend,
-    hand_point: Point,
-) -> None:
-    if state.last_hand_point is None:
-        # First sighting (or resuming after the hand left): anchor the reference
-        # to the hand and the cursor to the live OS pointer so nothing jumps.
-        state.last_hand_point = hand_point
-        state.cursor_pos = backend.position()
-        state.cursor_velocity = (0.0, 0.0)
-        return
-
-    width, height = backend.screen_size
-    raw_dx = (hand_point[0] - state.last_hand_point[0]) * width * config.cursor_gain
-    raw_dy = (hand_point[1] - state.last_hand_point[1]) * height * config.cursor_gain
-    state.last_hand_point = hand_point
-
-    alpha = config.smoothing
-    vx = state.cursor_velocity[0] * (1.0 - alpha) + raw_dx * alpha
-    vy = state.cursor_velocity[1] * (1.0 - alpha) + raw_dy * alpha
-    state.cursor_velocity = (vx, vy)
-
-    if math.hypot(vx, vy) < config.cursor_deadzone:
-        return
-
-    if state.cursor_pos is None:
-        state.cursor_pos = backend.position()
-    state.cursor_pos = (
-        clamp(state.cursor_pos[0] + vx, 0.0, float(width)),
-        clamp(state.cursor_pos[1] + vy, 0.0, float(height)),
-    )
-    backend.move_to(state.cursor_pos)
-
-
-def forget_hand_reference(state: RuntimeState) -> None:
-    state.last_hand_point = None
-    state.cursor_velocity = (0.0, 0.0)
 
 
 def apply_tilt_scroll(

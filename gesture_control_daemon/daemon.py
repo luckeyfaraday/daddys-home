@@ -87,10 +87,6 @@ class ActionBackend:
     def __init__(self) -> None:
         self.screen_size = (1920, 1080)
 
-    def position(self) -> Point:
-        """Current pointer position. Defaults to screen center if unknown."""
-        return (self.screen_size[0] / 2.0, self.screen_size[1] / 2.0)
-
     def move_to(self, point: Point) -> None:
         raise NotImplementedError
 
@@ -113,15 +109,8 @@ class ActionBackend:
 class DryRunBackend(ActionBackend):
     name = "dry-run"
 
-    def __init__(self) -> None:
-        super().__init__()
-        self._pos: Point = (self.screen_size[0] / 2.0, self.screen_size[1] / 2.0)
-
-    def position(self) -> Point:
-        return self._pos
-
     def move_to(self, point: Point) -> None:
-        self._pos = point
+        return
 
     def click(self) -> None:
         LOGGER.info("dry-run click")
@@ -148,9 +137,6 @@ class PyAutoGuiBackend(ActionBackend):
         self._pyautogui.FAILSAFE = True
         self._pyautogui.PAUSE = 0
         self.screen_size = tuple(self._pyautogui.size())
-
-    def position(self) -> Point:
-        return tuple(self._pyautogui.position())
 
     def move_to(self, point: Point) -> None:
         self._pyautogui.moveTo(point[0], point[1], duration=0)
